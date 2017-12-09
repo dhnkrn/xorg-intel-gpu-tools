@@ -69,6 +69,7 @@ typedef struct {
 	enum operations op;
 	uint32_t devid;
 	uint32_t crtc_id;
+	enum pipe pipe;
 	igt_display_t display;
 	drm_intel_bufmgr *bufmgr;
 	struct igt_fb fb_green, fb_white;
@@ -107,6 +108,7 @@ static void setup_output(data_t *data)
 		if (c->connector_type != DRM_MODE_CONNECTOR_eDP)
 			continue;
 
+		data->pipe = pipe;
 		igt_output_set_pipe(output, pipe);
 		data->crtc_id = output->config.crtc->crtc_id;
 		data->output = output;
@@ -283,6 +285,63 @@ static void assert_or_manual(bool condition, const char *expected)
 {
 	igt_debug_manual_check("no-crc", expected);
 	igt_assert(igt_interactive_debug || condition);
+}
+
+static unsigned int get_vblank(int fd, unsigned int pipe)
+{
+	union drm_wait_vblank vbl;
+
+	memset(&vbl, 0, sizeof(vbl));
+	vbl.request.type = DRM_VBLANK_RELATIVE | kmstest_get_vbl_flag(pipe);
+	igt_ioctl(fd, DRM_IOCTL_WAIT_VBLANK, &vbl);
+
+	return vbl.reply.sequence;
+}
+
+static void dmc_read_counts(unsigned int fd, unsigned int *count)
+{
+	char buf[512];
+
+	igt_debugfs_read(fd, "i915_dmc_info", buf);
+	igt_assert_eq(sscanf(strstr(buf, "DC3 -> DC5"), "DC3 -> DC5 count: %u", &count[0]),
+		      1);
+	igt_assert_eq(sscanf(strstr(buf, "DC5 -> DC6"), "DC5 -> DC6 count: %u", &count[1]),
+		      1);
+	igt_debug("DC3->DC5 count=%u, DC5->DC6 count=%u\n", count[0], count[1]);
+}
+
+static void check_vblanks(data_t *data)
+{
+	unsigned int first_vbl, second_vbl;
+	int wait = 30; /* Takes about 2.5 seconds for DC_OFF disable */
+	char buf[512];
+	bool has_dmc;
+
+	first_vbl = get_vblank(data->drm_fd, data->pipe);
+
+	igt_debugfs_read(data->drm_fd, "i915_dmc_info", buf);
+	has_dmc = strstr(buf, "fw loaded: yes");
+
+	if (has_dmc) {
+		unsigned int new_dc[2], old_dc[2];
+
+		dmc_read_counts(data->drm_fd, new_dc);
+		do {
+			memcpy(old_dc, new_dc, sizeof(new_dc));
+			usleep(100 * 1000);
+			dmc_read_counts(data->drm_fd, new_dc);
+		} while (!memcmp(old_dc, new_dc, sizeof(new_dc)) && --wait);
+
+		igt_assert_f(wait, "Timed out waiting for DC state transition 3s.\n");
+	} else {
+		sleep(3);
+	}
+
+	second_vbl = get_vblank(data->drm_fd, data->pipe);
+	igt_debug("vblank count went from %u to %u in %d ms.\n",
+		  first_vbl, second_vbl, has_dmc ? (30 - wait) * 100 : 3000);
+
+	igt_assert_lt(first_vbl, second_vbl);
 }
 
 static bool drrs_disabled(data_t *data)
@@ -570,6 +629,13 @@ int main(int argc, char *argv[])
 			run_test(&data);
 			test_cleanup(&data);
 		}
+	}
+
+	igt_subtest("vblank") {
+		setup_test_plane(&data);
+		igt_assert(wait_psr_entry(&data));
+		check_vblanks(&data);
+		test_cleanup(&data);
 	}
 
 	igt_subtest_f("dpms_off_psr_active") {
