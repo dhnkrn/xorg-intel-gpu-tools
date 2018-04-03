@@ -78,6 +78,11 @@ typedef struct {
 	bool with_timestamps;
 } data_t;
 
+struct timestamps {
+	int64_t last_attempted_entry;
+	int64_t last_exit;
+};
+
 static void create_cursor_fb(data_t *data)
 {
 	cairo_t *cr;
@@ -209,7 +214,9 @@ static void timestamp_support(data_t *data)
 	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
 	data->with_timestamps = strstr(buf, "Last exit at:");
 	igt_debug("Time stamp support %d\n", data->with_timestamps);
-	igt_sysfs_set(data->debugfs_fd, "i915_edp_psr_debug", "0");
+
+	if (!data->with_timestamps)
+		igt_sysfs_set(data->debugfs_fd, "i915_edp_psr_debug", "0");
 }
 
 static bool psr_enabled(data_t *data)
@@ -304,6 +311,77 @@ static bool drrs_disabled(data_t *data)
 	return !strstr(buf, "DRRS Supported: Yes\n");
 }
 
+static inline void  __timestamp_read(int fd, int64_t *entry, int64_t *exit)
+{
+	int found;
+	char buf[512];
+	char *begin;
+
+	igt_debugfs_read(fd, "i915_edp_psr_status", buf);
+
+	begin = strstr(buf, "Last attempted entry at: ");
+	igt_assert_f(begin, "Could not read timestamp\n");
+	found = sscanf(begin, "Last attempted entry at: %ld", entry);
+	igt_assert(found == 1);
+
+	begin = strstr(buf, "Last exit at: ");
+	igt_assert_f(begin, "Could not read timestamp\n");
+	found =	sscanf(begin, "Last exit at: %ld\n", exit);
+	igt_assert(found == 1);
+}
+
+static inline void assert_timestamp_entry(data_t *data, struct timestamps *pre)
+{
+	int timeout = 300; /* 3 seconds */
+
+	if (!data->with_timestamps)
+		return;
+
+	do {
+		__timestamp_read(data->drm_fd, &pre->last_attempted_entry,
+				 &pre->last_exit);
+		igt_debug("pre-condition: last attempted exit: %ld last exit: %ld\n",
+			  pre->last_attempted_entry, pre->last_exit);
+
+		if (pre->last_attempted_entry > pre->last_exit)
+			break;
+
+		usleep(10000);
+	} while (--timeout);
+
+	/* FIXME: Wait for a few frames after attempted entry interrupts so that
+	 * PSR becomes active. Check if PSR_STATUS can be polled for a more
+	 * precise check.
+	 */
+	usleep(50000);
+	igt_assert_f(timeout, "timed out waiting for PSR entry\n");
+}
+
+static inline void assert_timestamp_exit(data_t *data, struct timestamps *pre)
+{
+	int64_t last_attempted_entry = 0, last_exit = 0;
+	int timeout = 300; /* 3 seconds */
+
+	if (!data->with_timestamps)
+		return;
+
+	do {
+		__timestamp_read(data->drm_fd, &last_attempted_entry,
+				 &last_exit);
+		igt_debug("post trigger: last attempted entry: %ld last exit: %ld\n",
+			  last_attempted_entry, last_exit);
+
+		igt_assert_f(pre->last_attempted_entry == last_attempted_entry,
+			     "PSR was not active before the exit trigger or the test waited too long to check for exit\n");
+
+		if (last_exit > last_attempted_entry)
+			break;
+
+		usleep(10000);
+	} while (--timeout);
+	igt_assert_f(timeout, "timedout waiting for PSR exit\n");
+}
+
 static void run_test(data_t *data)
 {
 	uint32_t handle = data->fb_white.gem_handle;
@@ -311,8 +389,10 @@ static void run_test(data_t *data)
 	void *ptr;
 	char ref_crc[CRC_LEN];
 	const char *expected = "";
+	struct timestamps pre = {0};
 
-	igt_require_f(igt_interactive_debug || data->with_sink_crc,
+	igt_require_f(data->with_timestamps ||
+		      igt_interactive_debug || data->with_sink_crc,
 		      "Enable interactive debug with --interactive-debug or "
 		      "enable sink crc with --sink-crc\n");
 
@@ -334,6 +414,7 @@ static void run_test(data_t *data)
 	manual(test_plane->type == DRM_PLANE_TYPE_PRIMARY ?
 	       "screen WHITE" : "WHITE box on GREEN");
 	is_not_green_crc(data, ref_crc);
+	assert_timestamp_entry(data, &pre);
 
 	switch (data->op) {
 	case PAGE_FLIP:
@@ -383,6 +464,8 @@ static void run_test(data_t *data)
 		expected = "screen GREEN";
 		break;
 	}
+
+	assert_timestamp_exit(data, &pre);
 	manual(expected);
 	is_not_equal_crc(data, ref_crc);
 }
@@ -585,6 +668,7 @@ int main(int argc, char *argv[])
 	}
 
 	igt_fixture {
+		igt_sysfs_set(data.debugfs_fd, "i915_edp_psr_debug", "0");
 		close(data.debugfs_fd);
 		drm_intel_bufmgr_destroy(data.bufmgr);
 		display_fini(&data);
