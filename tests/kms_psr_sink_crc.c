@@ -78,6 +78,11 @@ typedef struct {
 	igt_output_t *output;
 } data_t;
 
+typedef struct {
+	int64_t last_attempted_entry;
+	int64_t last_exit;
+} timestamps_t;
+
 static void create_cursor_fb(data_t *data)
 {
 	cairo_t *cr;
