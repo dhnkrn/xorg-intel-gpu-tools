@@ -230,8 +230,8 @@ static void get_sink_crc(data_t *data, char *crc)
 	if (igt_interactive_debug)
 		return;
 
-	igt_require_f(igt_sysfs_scanf(data->debugfs_fd, "i915_sink_crc_eDP1",
-				      "%s\n", crc),
+	igt_require_f(igt_sysfs_read(data->debugfs_fd, "i915_sink_crc_eDP1",
+				     crc, CRC_LEN) == CRC_LEN,
 		      "Sink CRC is unreliable on this machine. Try manual debug with --interactive-debug=no-crc\n");
 
 	igt_debug("sink CRC: %s\n", crc);
