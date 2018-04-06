@@ -234,8 +234,8 @@ static void get_sink_crc(data_t *data, char *crc)
 				      "%s\n", crc),
 		      "Sink CRC is unreliable on this machine. Try manual debug with --interactive-debug=no-crc\n");
 
-	igt_debug("%s\n", crc);
-	igt_debug_wait_for_keypress("crc");
+	igt_debug("sink CRC: %s\n", crc);
+	igt_debug_wait_for_keypress("sink crc");
 
 	/* The important value was already taken.
 	 * Now give a time for human eyes
@@ -243,7 +243,8 @@ static void get_sink_crc(data_t *data, char *crc)
 	usleep(300000);
 
 	/* Black screen is always invalid */
-	igt_assert(strncmp(crc, CRC_BLACK, CRC_LEN) != 0);
+	igt_assert_f(strncmp(crc, CRC_BLACK, CRC_LEN) != 0,
+		     "sink CRC %s expected %s\n", crc, CRC_BLACK);
 }
 
 static bool is_green(char *crc)
