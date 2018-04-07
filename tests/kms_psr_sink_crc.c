@@ -262,7 +262,8 @@ static bool is_green(char *crc)
 static void assert_or_manual(bool condition, const char *expected)
 {
 	igt_debug_manual_check("no-crc", expected);
-	igt_assert(igt_interactive_debug || condition);
+	igt_assert_f(igt_interactive_debug || condition,
+		    "expected %s\n", expected);
 }
 
 static bool drrs_disabled(data_t *data)
