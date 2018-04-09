@@ -76,6 +76,7 @@ typedef struct {
 	int mod_stride;
 	drmModeModeInfo *mode;
 	igt_output_t *output;
+	bool use_timestamps;;
 } data_t;
 
 typedef struct {
@@ -205,6 +206,14 @@ static bool sink_support(data_t *data)
 
 	return running_with_psr_disabled ||
 		strstr(buf, "Sink_Support: yes\n");
+}
+
+static void timestamp_support(data_t *data)
+{
+	char buf[512];
+
+	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
+	data->use_timestamps = strstr(buf, "Last exit at:");
 }
 
 static bool psr_enabled(data_t *data)
@@ -483,6 +492,7 @@ int main(int argc, char *argv[])
 					 0 : 1);
 
 		igt_require_f(sink_support(&data), "Sink does not support PSR\n");
+		timestamp_support(&data);
 
 		data.bufmgr = drm_intel_bufmgr_gem_init(data.drm_fd, 4096);
 		igt_assert(data.bufmgr);
