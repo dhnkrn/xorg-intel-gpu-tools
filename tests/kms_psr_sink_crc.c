@@ -214,11 +214,13 @@ static bool psr_enabled(data_t *data)
 
 static bool wait_psr_entry(data_t *data)
 {
-	int timeout = 5;
+	int timeout = 10;
+
 	while (timeout--) {
 		if (psr_enabled(data))
 			return true;
-		sleep(1);
+		usleep(100000);
+		igt_debug("Waiting for PSR entry %d ms\n", (10-timeout)*100);
 	}
 	return false;
 }
