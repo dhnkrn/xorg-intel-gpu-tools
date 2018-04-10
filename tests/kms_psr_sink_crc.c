@@ -31,8 +31,6 @@
 
 #include "intel_bufmgr.h"
 
-bool running_with_psr_disabled;
-
 #define CRC_BLACK "000000000000"
 #define CRC_LEN 12
 
@@ -77,6 +75,7 @@ typedef struct {
 	drmModeModeInfo *mode;
 	igt_output_t *output;
 	bool use_timestamps;;
+	bool with_psr_disabled;
 } data_t;
 
 typedef struct {
@@ -204,7 +203,7 @@ static bool sink_support(data_t *data)
 
 	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
 
-	return running_with_psr_disabled ||
+	return data->with_psr_disabled ||
 		strstr(buf, "Sink_Support: yes\n");
 }
 
@@ -222,7 +221,7 @@ static bool psr_enabled(data_t *data)
 
 	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
 
-	return running_with_psr_disabled ||
+	return data->with_psr_disabled ||
 		strstr(buf, "HW Enabled & Active bit: yes\n");
 }
 
@@ -455,11 +454,13 @@ static void dpms_off_on(data_t data)
 				   DRM_MODE_DPMS_ON);
 }
 
-static int opt_handler(int opt, int opt_index, void *data)
+static int opt_handler(int opt, int opt_index, void *_data)
 {
+	data_t *data = _data;
+
 	switch (opt) {
 	case 'n':
-		running_with_psr_disabled = true;
+		data->with_psr_disabled = true;
 		break;
 	default:
 		igt_assert(0);
@@ -480,7 +481,7 @@ int main(int argc, char *argv[])
 	enum operations op;
 
 	igt_subtest_init_parse_opts(&argc, argv, "", long_options,
-				    help_str, opt_handler, NULL);
+				    help_str, opt_handler, &data);
 	igt_skip_on_simulation();
 
 	igt_fixture {
@@ -489,7 +490,7 @@ int main(int argc, char *argv[])
 		kmstest_set_vt_graphics_mode();
 		data.devid = intel_get_drm_devid(data.drm_fd);
 
-		igt_set_module_param_int("enable_psr", running_with_psr_disabled ?
+		igt_set_module_param_int("enable_psr", data.with_psr_disabled ?
 					 0 : 1);
 
 		igt_require_f(sink_support(&data), "Sink does not support PSR\n");
