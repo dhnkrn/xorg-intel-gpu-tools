@@ -75,6 +75,7 @@ typedef struct {
 	drmModeModeInfo *mode;
 	igt_output_t *output;
 	bool with_psr_disabled;
+	bool with_sink_crc;
 } data_t;
 
 static void create_cursor_fb(data_t *data)
@@ -273,6 +274,10 @@ static void run_test(data_t *data)
 	char crc[CRC_LEN];
 	const char *expected = "";
 
+	if (!igt_interactive_debug)
+		igt_require_f(data->with_sink_crc,
+			      "Enable sink CRC with --sink-crc\n");
+
 	/* Confirm that screen became Green */
 	get_sink_crc(data, ref_crc);
 	assert_or_manual(is_green(ref_crc), "screen GREEN");
@@ -438,6 +443,9 @@ static int opt_handler(int opt, int opt_index, void *_data)
 	case 'n':
 		data->with_psr_disabled = true;
 		break;
+	case 'c':
+		data->with_sink_crc = true;
+		break;
 	default:
 		igt_assert(0);
 	}
@@ -448,9 +456,11 @@ static int opt_handler(int opt, int opt_index, void *_data)
 int main(int argc, char *argv[])
 {
 	const char *help_str =
-	       "  --no-psr\tRun test without PSR to check the CRC test logic.";
+	       "  --no-psr\tRun test without PSR to check the CRC test logic.\n"	\
+	       "  --sink-crc\tRun tests using sink CRC";
 	static struct option long_options[] = {
 		{"no-psr", 0, 0, 'n'},
+		{"sink-crc", 0, 0, 'c'},
 		{ 0, 0, 0, 0 }
 	};
 	data_t data = {};
