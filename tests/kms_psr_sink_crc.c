@@ -376,7 +376,8 @@ static void run_test(data_t *data)
 static void test_cleanup(data_t *data) {
 	igt_plane_t *primary;
 
-	primary = igt_output_get_plane_type(data->output, DRM_PLANE_TYPE_PRIMARY);
+	primary = igt_output_get_plane_type(data->output,
+					    DRM_PLANE_TYPE_PRIMARY);
 	igt_plane_set_fb(primary, NULL);
 	igt_plane_set_fb(data->test_plane, NULL);
 	igt_display_commit(&data->display);
@@ -397,7 +398,8 @@ static void setup_test_plane(data_t *data, int test_plane)
 			    0.0, 1.0, 0.0,
 			    &data->fb_green);
 
-	primary = igt_output_get_plane_type(data->output, DRM_PLANE_TYPE_PRIMARY);
+	primary = igt_output_get_plane_type(data->output,
+					    DRM_PLANE_TYPE_PRIMARY);
 	igt_plane_set_fb(primary, NULL);
 	data->test_plane = primary;
 
@@ -411,7 +413,7 @@ static void setup_test_plane(data_t *data, int test_plane)
 	switch (test_plane) {
 	case DRM_PLANE_TYPE_OVERLAY:
 		sprite = igt_output_get_plane_type(data->output,
-							 DRM_PLANE_TYPE_OVERLAY);
+						   DRM_PLANE_TYPE_OVERLAY);
 		igt_plane_set_fb(sprite, NULL);
 		white_h = white_h/2;
 		white_v = white_v/2;
