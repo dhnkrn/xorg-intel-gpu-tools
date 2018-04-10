@@ -223,11 +223,8 @@ static bool wait_psr_entry(data_t *data)
 	return false;
 }
 
-static void get_sink_crc(data_t *data, char *crc)
+static void __get_sink_crc(data_t *data, char *crc)
 {
-	if (igt_interactive_debug)
-		return;
-
 	igt_require_f(igt_sysfs_read(data->debugfs_fd, "i915_sink_crc_eDP1",
 				     crc, CRC_LEN) == CRC_LEN,
 		      "Sink CRC is unreliable on this machine. Try manual debug with --interactive-debug=no-crc\n");
@@ -237,22 +234,53 @@ static void get_sink_crc(data_t *data, char *crc)
 	igt_assert(strncmp(crc, CRC_BLACK, CRC_LEN));
 }
 
-static bool is_green(char *crc)
+static bool __is_green(data_t *data, char *out_crc)
 {
 	const char *mask = "0000FFFF0000";
-	uint32_t *p = (uint32_t *)crc, *mask_p = (uint32_t *)mask;
-	if (igt_interactive_debug)
-		return false;
+	uint32_t *p, *mask_p = (uint32_t *)mask;
+	char _crc[CRC_LEN], *crc;
+
+	crc = out_crc ? out_crc : _crc;
+	__get_sink_crc(data, crc);
+	p = (uint32_t *)crc;
 
 	/* Check R and B components are 0 and G is non-zero */
-	return *p == *mask_p && *(p + 2) == *(mask_p + 2) &&
-	       (*(p + 1) & *(mask_p + 1)) != 0;
+	return *p == *mask_p &&
+	       *(p + 2) == *(mask_p + 2) &&
+	       *(p + 1) & *(mask_p + 1);
 }
 
-static void assert_or_manual(bool condition, const char *expected)
+static void is_green_crc(data_t *data, char *out_crc)
 {
-	igt_debug_manual_check("no-crc", expected);
-	igt_assert(igt_interactive_debug || condition);
+	if (!data->with_sink_crc)
+		return;
+
+	igt_assert(__is_green(data, out_crc));
+}
+
+static void is_not_green_crc(data_t *data, char *out_crc)
+{
+	if (!data->with_sink_crc)
+		return;
+
+	igt_fail_on(__is_green(data, out_crc));
+}
+
+static void is_not_equal_crc(data_t *data, const char *ref_crc)
+{
+	char crc[CRC_LEN];
+
+	if (!data->with_sink_crc)
+		return;
+
+	__get_sink_crc(data, crc);
+	igt_assert_f(strncmp(ref_crc, crc, CRC_LEN), "screen update failed\n");
+}
+
+static void manual(const char *expected)
+{
+	if (igt_interactive_debug)
+		igt_debug_manual_check("no-crc", expected);
 }
 
 static bool drrs_disabled(data_t *data)
@@ -270,21 +298,20 @@ static void run_test(data_t *data)
 	igt_plane_t *test_plane = data->test_plane;
 	void *ptr;
 	char ref_crc[CRC_LEN];
-	char crc[CRC_LEN];
 	const char *expected = "";
 
-	if (!igt_interactive_debug)
-		igt_require_f(data->with_sink_crc,
-			      "Enable sink CRC with --sink-crc\n");
+	igt_require_f(igt_interactive_debug || data->with_sink_crc,
+		      "Enable interactive debug with --interactive-debug or "
+		      "enable sink crc with --sink-crc\n");
 
 	/* Confirm that screen became Green */
-	get_sink_crc(data, ref_crc);
-	assert_or_manual(is_green(ref_crc), "screen GREEN");
+	manual("screen GREEN");
+	is_green_crc(data, NULL);
 
 	/* Confirm screen stays Green after PSR got active */
 	igt_assert(wait_psr_entry(data));
-	get_sink_crc(data, ref_crc);
-	assert_or_manual(is_green(ref_crc), "screen GREEN");
+	manual("screen GREEN");
+	is_green_crc(data, NULL);
 
 	/* Setting a secondary fb/plane */
 	igt_plane_set_fb(test_plane, &data->fb_white);
@@ -292,20 +319,17 @@ static void run_test(data_t *data)
 
 	/* Confirm it is not Green anymore */
 	igt_assert(wait_psr_entry(data));
-	get_sink_crc(data, ref_crc);
-	if (test_plane->type == DRM_PLANE_TYPE_PRIMARY)
-		assert_or_manual(!is_green(ref_crc), "screen WHITE");
-	else
-		assert_or_manual(!is_green(ref_crc), "GREEN background with WHITE box");
+	manual(test_plane->type == DRM_PLANE_TYPE_PRIMARY ?
+	       "screen WHITE" : "WHITE box on GREEN");
+	is_not_green_crc(data, ref_crc);
 
 	switch (data->op) {
 	case PAGE_FLIP:
 		/* Only in use when testing primary plane */
 		igt_assert(drmModePageFlip(data->drm_fd, data->crtc_id,
 					   data->fb_green.fb_id, 0, NULL) == 0);
-		get_sink_crc(data, crc);
-		assert_or_manual(is_green(crc), "screen GREEN");
-		expected = "still GREEN";
+		is_green_crc(data, NULL);
+		expected = "screen GREEN";
 		break;
 	case MMAP_GTT:
 		ptr = gem_mmap__gtt(data->drm_fd, handle, data->mod_size,
@@ -347,8 +371,8 @@ static void run_test(data_t *data)
 		expected = "screen GREEN";
 		break;
 	}
-	get_sink_crc(data, crc);
-	assert_or_manual(strncmp(ref_crc, crc, CRC_LEN) != 0, expected);
+	manual(expected);
+	is_not_equal_crc(data, ref_crc);
 }
 
 static void test_cleanup(data_t *data) {
