@@ -69,7 +69,6 @@ typedef struct {
 	int mod_stride;
 	drmModeModeInfo *mode;
 	igt_output_t *output;
-	bool with_psr_disabled;
 } data_t;
 
 static void create_cursor_fb(data_t *data)
@@ -193,8 +192,7 @@ static bool sink_support(data_t *data)
 
 	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
 
-	return data->with_psr_disabled ||
-		strstr(buf, "Sink_Support: yes\n");
+	return strstr(buf, "Sink_Support: yes\n");
 }
 
 static bool psr_active(data_t *data, bool check_active)
@@ -211,9 +209,6 @@ static bool psr_active(data_t *data, bool check_active)
 
 static bool wait_psr_entry(data_t *data)
 {
-	if (data->with_psr_disabled)
-		return true;
-
 	return igt_wait((psr_active(data, true)), 500, 1);
 }
 
@@ -387,34 +382,11 @@ static void dpms_off_on(data_t *data)
 				   DRM_MODE_DPMS_ON);
 }
 
-static int opt_handler(int opt, int opt_index, void *_data)
+igt_main
 {
-	data_t *data = _data;
-
-	switch (opt) {
-	case 'n':
-		data->with_psr_disabled = true;
-		break;
-	default:
-		igt_assert(0);
-	}
-
-	return 0;
-}
-
-int main(int argc, char *argv[])
-{
-	const char *help_str =
-	       "  --no-psr\tRun test without PSR.";
-	static struct option long_options[] = {
-		{"no-psr", 0, 0, 'n'},
-		{ 0, 0, 0, 0 }
-	};
 	data_t data = {};
 	enum operations op;
 
-	igt_subtest_init_parse_opts(&argc, argv, "", long_options,
-				    help_str, opt_handler, &data);
 	igt_skip_on_simulation();
 
 	igt_fixture {
@@ -423,8 +395,7 @@ int main(int argc, char *argv[])
 		kmstest_set_vt_graphics_mode();
 		data.devid = intel_get_drm_devid(data.drm_fd);
 
-		igt_set_module_param_int("enable_psr", data.with_psr_disabled ?
-					 0 : 1);
+		igt_set_module_param_int("enable_psr", 1);
 		igt_require_f(sink_support(&data),
 			      "Sink does not support PSR\n");
 
@@ -503,6 +474,4 @@ int main(int argc, char *argv[])
 		drm_intel_bufmgr_destroy(data.bufmgr);
 		display_fini(&data);
 	}
-
-	igt_exit();
 }
