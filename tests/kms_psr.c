@@ -24,6 +24,7 @@
 
 #include "igt.h"
 #include "igt_sysfs.h"
+#include "igt_psr.h"
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -195,23 +196,6 @@ static bool sink_support(data_t *data)
 	return strstr(buf, "Sink_Support: yes\n");
 }
 
-static bool psr_active(int fd, bool check_active)
-{
-	bool active;
-	char buf[512];
-
-	igt_debugfs_read(fd, "i915_edp_psr_status", buf);
-
-	active = strstr(buf, "HW Enabled & Active bit: yes\n") &&
-		 (strstr(buf, "SRDENT") || strstr(buf, "SLEEP"));
-	return check_active ? active : !active;
-}
-
-static bool wait_psr_entry(int fd)
-{
-	return igt_wait((psr_active(fd, true)), 500, 1);
-}
-
 static inline void manual(const char *expected)
 {
 	igt_debug_manual_check("all", expected);
@@ -237,7 +221,7 @@ static void run_test(data_t *data)
 	manual("screen GREEN");
 
 	/* Confirm screen stays Green after PSR got active */
-	igt_assert(wait_psr_entry(data->drm_fd));
+	igt_assert(psr_wait_entry(data->drm_fd));
 	manual("screen GREEN");
 
 	/* Setting a secondary fb/plane */
@@ -250,7 +234,7 @@ static void run_test(data_t *data)
 	else
 		manual("GREEN background with WHITE box");
 
-	igt_assert(wait_psr_entry(data->drm_fd));
+	igt_assert(psr_wait_entry(data->drm_fd));
 	switch (data->op) {
 	case PAGE_FLIP:
 		/* Only in use when testing primary plane */
@@ -408,13 +392,13 @@ igt_main
 
 	igt_subtest("basic") {
 		setup_test_plane(&data, DRM_PLANE_TYPE_PRIMARY);
-		igt_assert(wait_psr_entry(data.drm_fd));
+		igt_assert(psr_wait_entry(data.drm_fd));
 		test_cleanup(&data);
 	}
 
 	igt_subtest("no_drrs") {
 		setup_test_plane(&data, DRM_PLANE_TYPE_PRIMARY);
-		igt_assert(wait_psr_entry(data.drm_fd));
+		igt_assert(psr_wait_entry(data.drm_fd));
 		igt_assert(drrs_disabled(&data));
 		test_cleanup(&data);
 	}
@@ -423,7 +407,7 @@ igt_main
 		igt_subtest_f("primary_%s", op_str(op)) {
 			data.op = op;
 			setup_test_plane(&data, DRM_PLANE_TYPE_PRIMARY);
-			igt_assert(wait_psr_entry(data.drm_fd));
+			igt_assert(psr_wait_entry(data.drm_fd));
 			run_test(&data);
 			test_cleanup(&data);
 		}
@@ -433,7 +417,7 @@ igt_main
 		igt_subtest_f("sprite_%s", op_str(op)) {
 			data.op = op;
 			setup_test_plane(&data, DRM_PLANE_TYPE_OVERLAY);
-			igt_assert(wait_psr_entry(data.drm_fd));
+			igt_assert(psr_wait_entry(data.drm_fd));
 			run_test(&data);
 			test_cleanup(&data);
 		}
@@ -443,7 +427,7 @@ igt_main
 		igt_subtest_f("cursor_%s", op_str(op)) {
 			data.op = op;
 			setup_test_plane(&data, DRM_PLANE_TYPE_CURSOR);
-			igt_assert(wait_psr_entry(data.drm_fd));
+			igt_assert(psr_wait_entry(data.drm_fd));
 			run_test(&data);
 			test_cleanup(&data);
 		}
@@ -452,7 +436,7 @@ igt_main
 	igt_subtest_f("dpms") {
 		data.op = RENDER;
 		setup_test_plane(&data, DRM_PLANE_TYPE_PRIMARY);
-		igt_assert(wait_psr_entry(data.drm_fd));
+		igt_assert(psr_wait_entry(data.drm_fd));
 		dpms_off_on(&data);
 		run_test(&data);
 		test_cleanup(&data);
@@ -461,10 +445,10 @@ igt_main
 	igt_subtest_f("suspend") {
 		data.op = PLANE_ONOFF;
 		setup_test_plane(&data, DRM_PLANE_TYPE_CURSOR);
-		igt_assert(wait_psr_entry(data.drm_fd));
+		igt_assert(psr_wait_entry(data.drm_fd));
 		igt_system_suspend_autoresume(SUSPEND_STATE_MEM,
 					      SUSPEND_TEST_NONE);
-		igt_assert(wait_psr_entry(data.drm_fd));
+		igt_assert(psr_wait_entry(data.drm_fd));
 		run_test(&data);
 		test_cleanup(&data);
 	}
