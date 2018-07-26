@@ -43,6 +43,7 @@ typedef struct {
 	uint32_t override_fmt;
 	uint64_t override_tiling;
 	int devid;
+	int gen;
 } data_t;
 
 typedef struct {
@@ -284,6 +285,17 @@ static void prepare_fbs(data_t *data, igt_output_t *output,
 		igt_plane_set_position(plane, data->pos_x, data->pos_y);
 }
 
+static void igt_check_rotation(data_t *data)
+{
+	if (data->rotation & (IGT_ROTATION_90 | IGT_ROTATION_270))
+		igt_require(data->gen >= 9);
+	if (data->rotation & IGT_REFLECT_X)
+		igt_require(data->gen >= 11 ||
+			    (IS_CHERRYVIEW(data->devid) && (data->rotation & IGT_ROTATION_0)));
+	if (data->rotation & IGT_ROTATION_180)
+		igt_require(data->gen >= 4);
+}
+
 static void test_single_case(data_t *data, enum pipe pipe,
 			     igt_output_t *output, igt_plane_t *plane,
 			     enum rectangle_type rect,
@@ -352,14 +364,17 @@ static void test_plane_rotation(data_t *data, int plane_type, bool test_bad_form
 
 	igt_display_require_output(display);
 
+	igt_check_rotation(data);
+
 	for_each_pipe_with_valid_output(display, pipe, output) {
 		igt_plane_t *plane;
 		int i, j;
 
-		if (IS_CHERRYVIEW(data->devid) && pipe != PIPE_B)
-			continue;
-
 		igt_output_set_pipe(output, pipe);
+
+		if (IS_CHERRYVIEW(data->devid) && (data->rotation & IGT_REFLECT_X) &&
+		    pipe != kmstest_pipe_to_index('B'))
+			continue;
 
 		plane = igt_output_get_plane_type(output, plane_type);
 		igt_require(igt_plane_has_prop(plane, IGT_PLANE_ROTATION));
@@ -521,14 +536,13 @@ igt_main
 	};
 
 	data_t data = {};
-	int gen = 0;
 
 	igt_skip_on_simulation();
 
 	igt_fixture {
 		data.gfx_fd = drm_open_driver_master(DRIVER_INTEL);
 		data.devid = intel_get_drm_devid(data.gfx_fd);
-		gen = intel_gen(data.devid);
+		data.gen = intel_gen(data.devid);
 
 		kmstest_set_vt_graphics_mode();
 
@@ -541,16 +555,12 @@ igt_main
 		igt_subtest_f("%s-rotation-%s",
 			      plane_test_str(subtest->plane),
 			      rot_test_str(subtest->rot)) {
-			igt_require(!(subtest->rot &
-				    (IGT_ROTATION_90 | IGT_ROTATION_270)) ||
-				    gen >= 9);
 			data.rotation = subtest->rot;
 			test_plane_rotation(&data, subtest->plane, false);
 		}
 	}
 
 	igt_subtest_f("sprite-rotation-90-pos-100-0") {
-		igt_require(gen >= 9);
 		data.rotation = IGT_ROTATION_90;
 		data.pos_x = 100,
 		data.pos_y = 0;
@@ -560,7 +570,6 @@ igt_main
 	data.pos_y = 0;
 
 	igt_subtest_f("bad-pixel-format") {
-		igt_require(gen >= 9);
 		data.rotation = IGT_ROTATION_90;
 		data.override_fmt = DRM_FORMAT_RGB565;
 		test_plane_rotation(&data, DRM_PLANE_TYPE_PRIMARY, true);
@@ -568,7 +577,6 @@ igt_main
 	data.override_fmt = 0;
 
 	igt_subtest_f("bad-tiling") {
-		igt_require(gen >= 9);
 		data.rotation = IGT_ROTATION_90;
 		data.override_tiling = LOCAL_I915_FORMAT_MOD_X_TILED;
 		test_plane_rotation(&data, DRM_PLANE_TYPE_PRIMARY, true);
@@ -579,9 +587,6 @@ igt_main
 		igt_subtest_f("primary-%s-reflect-x-%s",
 			      tiling_test_str(reflect_x->tiling),
 			      rot_test_str(reflect_x->rot)) {
-			igt_require(gen >= 10 ||
-				    (IS_CHERRYVIEW(data.devid) && reflect_x->rot == IGT_ROTATION_0
-				     && reflect_x->tiling == LOCAL_I915_FORMAT_MOD_X_TILED));
 			data.rotation = (IGT_REFLECT_X | reflect_x->rot);
 			data.override_tiling = reflect_x->tiling;
 			test_plane_rotation(&data, DRM_PLANE_TYPE_PRIMARY, false);
@@ -596,7 +601,7 @@ igt_main
 		enum pipe pipe;
 		igt_output_t *output;
 
-		igt_require(gen >= 9);
+		igt_require(data.gen >= 9);
 		igt_display_require_output(&data.display);
 
 		for_each_pipe_with_valid_output(&data.display, pipe, output) {

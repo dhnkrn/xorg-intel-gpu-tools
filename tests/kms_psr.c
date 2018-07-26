@@ -32,14 +32,17 @@
 #include "intel_bufmgr.h"
 
 enum operations {
-	PAGE_FLIP,
-	MMAP_GTT,
-	MMAP_CPU,
-	BLT,
-	RENDER,
-	PLANE_MOVE,
-	PLANE_ONOFF,
+	PAGE_FLIP =	1 << 0,
+	MMAP_GTT =	1 << 1,
+	MMAP_CPU =	1 << 2,
+	BLT =		1 << 3,
+	RENDER =	1 << 4,
+	PLANE_MOVE =	1 << 5,
+	PLANE_ONOFF =	1 << 6,
 };
+
+for_each_op(_start, op, _end)	for(op = start; op <= _end; op++)	\
+					 if (!(op & (op - 1)
 
 static const char *op_str(enum operations op)
 {
@@ -245,14 +248,15 @@ static void run_test(data_t *data)
 		manual("GREEN background with WHITE box");
 
 	igt_assert(psr_wait_entry_if_enabled(data));
-	switch (data->op) {
-	case PAGE_FLIP:
+
+	if (data->op & PAGE_FLIP) {
 		/* Only in use when testing primary plane */
 		igt_assert(drmModePageFlip(data->drm_fd, data->crtc_id,
 					   data->fb_green.fb_id, 0, NULL) == 0);
 		expected = "GREEN";
-		break;
-	case MMAP_GTT:
+	}
+
+	if (data->op & MMAP_GTT) {
 		ptr = gem_mmap__gtt(data->drm_fd, handle, data->mod_size,
 				    PROT_WRITE);
 		gem_set_domain(data->drm_fd, handle,
@@ -260,8 +264,9 @@ static void run_test(data_t *data)
 		memset(ptr, 0xcc, data->mod_size);
 		munmap(ptr, data->mod_size);
 		expected = "BLACK or TRANSPARENT mark on top of plane in test";
-		break;
-	case MMAP_CPU:
+	}
+
+	if (data->op & MMAP_CPU) {
 		ptr = gem_mmap__cpu(data->drm_fd, handle, 0, data->mod_size,
 				    PROT_WRITE);
 		gem_set_domain(data->drm_fd, handle,
@@ -270,28 +275,32 @@ static void run_test(data_t *data)
 		munmap(ptr, data->mod_size);
 		gem_sw_finish(data->drm_fd, handle);
 		expected = "BLACK or TRANSPARENT mark on top of plane in test";
-		break;
-	case BLT:
+	}
+
+	if (data->op & BLT) {
 		fill_blt(data, handle, 0);
 		expected = "BLACK or TRANSPARENT mark on top of plane in test";
-		break;
-	case RENDER:
+	}
+
+	if (data->op & RENDER) {
 		fill_render(data, handle, 0);
 		expected = "BLACK or TRANSPARENT mark on top of plane in test";
-		break;
-	case PLANE_MOVE:
+	}
+
+	if (data->op & PLANE_MOVE) {
 		/* Only in use when testing Sprite and Cursor */
 		igt_plane_set_position(test_plane, 500, 500);
 		igt_display_commit(&data->display);
 		expected = "White box moved to 500x500";
-		break;
-	case PLANE_ONOFF:
+	}
+
+	if (data->op & PLANE_ONOFF) {
 		/* Only in use when testing Sprite and Cursor */
 		igt_plane_set_fb(test_plane, NULL);
 		igt_display_commit(&data->display);
 		expected = "screen GREEN";
-		break;
 	}
+
 	igt_assert(psr_active(data->drm_fd, false));
 	manual(expected);
 }
@@ -437,7 +446,7 @@ int main(int argc, char *argv[])
 		test_cleanup(&data);
 	}
 
-	for (op = PAGE_FLIP; op <= RENDER; op++) {
+	for_each_op(PAGE_FLIP; op <= RENDER; op++) {
 		igt_subtest_f("primary_%s", op_str(op)) {
 			data.op = op;
 			setup_test_plane(&data, DRM_PLANE_TYPE_PRIMARY);
