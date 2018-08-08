@@ -37,19 +37,9 @@ char *igt_debugfs_path(int device, char *path, int pathlen);
 int igt_debugfs_dir(int device);
 
 int igt_debugfs_open(int fd, const char *filename, int mode);
-void __igt_debugfs_read(int fd, const char *filename, char *buf, int buf_size);
+int __igt_debugfs_read(int dir, const char *filename, char *buf);
+void igt_debugfs_read(int fd, const char *filename, char *buf);
 bool igt_debugfs_search(int fd, const char *filename, const char *substring);
-
-/**
- * igt_debugfs_read:
- * @filename: name of the debugfs file
- * @buf: buffer where the contents will be stored, allocated by the caller.
- *
- * This is just a convenience wrapper for __igt_debugfs_read. See its
- * documentation.
- */
-#define igt_debugfs_read(fd, filename, buf) \
-		__igt_debugfs_read(fd, (filename), (buf), sizeof(buf))
 
 /*
  * Pipe CRC

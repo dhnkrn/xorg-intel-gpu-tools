@@ -718,14 +718,13 @@ static void set_mode_for_params(struct modeset_params *params)
 	igt_display_commit(&drm.display);
 }
 
-static void __debugfs_read(const char *param, char *buf, int len)
+static void debugfs_read(const char *param, char *buf)
 {
-	len = igt_sysfs_read(drm.debugfs, param, buf, len - 1);
-	if (len < 0) {
+	int len;
+
+	len = __igt_debugfs_read(drm.debugfs, param, buf);
+	if (len < 0)
 		igt_assert_eq(len, -ENODEV);
-		len = 0;
-	}
-	buf[len] = '\0';
 }
 
 static int __debugfs_write(const char *param, char *buf, int len)
@@ -733,7 +732,6 @@ static int __debugfs_write(const char *param, char *buf, int len)
 	return igt_sysfs_write(drm.debugfs, param, buf, len - 1);
 }
 
-#define debugfs_read(p, arr) __debugfs_read(p, arr, sizeof(arr))
 #define debugfs_write(p, arr) __debugfs_write(p, arr, sizeof(arr))
 
 static char last_fbc_buf[128];
