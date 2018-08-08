@@ -23,18 +23,18 @@
 
 #include  "igt_psr.h"
 
-bool psr_active(int fd, bool check_active)
+bool psr_active(int dir, bool check_active)
 {
 	bool active;
 	char buf[512];
 
-	igt_debugfs_read(fd, "i915_edp_psr_status", buf);
+	igt_debugfs_simple_read(dir, "i915_edp_psr_status", buf, sizeof(buf));
 	active = strstr(buf, "HW Enabled & Active bit: yes\n") &&
 		(strstr(buf, "SRDENT") || strstr(buf, "SLEEP"));
 	return check_active ? active : !active;
 }
 
-bool psr_wait_entry(int fd)
+bool psr_wait_entry(int dir)
 {
-	return igt_wait(psr_active(fd, true), 500, 1);
+	return igt_wait(psr_active(dir, true), 500, 1);
 }

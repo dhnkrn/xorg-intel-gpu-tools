@@ -28,7 +28,7 @@
 #include "igt_core.h"
 #include "igt_aux.h"
 
-bool psr_wait_entry(int fd);
-bool psr_active(int fd, bool check_active);
+bool psr_wait_entry(int dir);
+bool psr_active(int dir, bool check_active);
 
 #endif
