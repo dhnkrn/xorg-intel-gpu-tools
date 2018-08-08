@@ -192,7 +192,7 @@ static bool sink_support(data_t *data)
 {
 	char buf[512];
 
-	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
+	__igt_debugfs_read(data->debugfs_fd, "i915_edp_psr_status", buf);
 
 	return data->with_psr_disabled ||
 		strstr(buf, "Sink_Support: yes\n");
@@ -203,7 +203,7 @@ static bool psr_wait_entry_if_enabled(data_t *data)
 	if (data->with_psr_disabled)
 		return true;
 
-	return psr_wait_entry(data->drm_fd);
+	return psr_wait_entry(data->debugfs_fd);
 }
 
 static inline void manual(const char *expected)
@@ -215,7 +215,7 @@ static bool drrs_disabled(data_t *data)
 {
 	char buf[512];
 
-	igt_debugfs_read(data->drm_fd, "i915_drrs_status", buf);
+	__igt_debugfs_read(data->debugfs_fd, "i915_drrs_status", buf);
 
 	return !strstr(buf, "DRRS Supported: Yes\n");
 }

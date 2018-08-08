@@ -28,7 +28,7 @@ bool psr_active(int fd, bool check_active)
 	bool active;
 	char buf[512];
 
-	igt_debugfs_read(fd, "i915_edp_psr_status", buf);
+	__igt_debugfs_read(fd, "i915_edp_psr_status", buf);
 	active = strstr(buf, "HW Enabled & Active bit: yes\n") &&
 		(strstr(buf, "SRDENT") || strstr(buf, "SLEEP"));
 	return check_active ? active : !active;
