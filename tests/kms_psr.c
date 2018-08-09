@@ -190,12 +190,14 @@ static void fill_render(data_t *data, uint32_t handle, unsigned char color)
 
 static bool sink_support(data_t *data)
 {
-	char buf[512];
+	if (data->with_psr_disabled) {
+		return true;
+	} else {
+		char buf[512];
 
-	igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
-
-	return data->with_psr_disabled ||
-		strstr(buf, "Sink_Support: yes\n");
+		igt_debugfs_read(data->drm_fd, "i915_edp_psr_status", buf);
+		return strstr(buf, "Sink_Support: yes\n");
+	}
 }
 
 static bool psr_wait_entry_if_enabled(data_t *data)
